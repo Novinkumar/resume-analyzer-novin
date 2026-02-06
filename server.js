@@ -150,11 +150,7 @@ app.post("/analyze", upload.single("resume"), async (req, res) => {
     const mime = req.file.mimetype;
 
     const isPdf =
-     ext === ".pdf";
-
-   const isImage =
-     [".png", ".jpg", ".jpeg"].includes(ext);
-
+      mime === "application/pdf" || ext === ".pdf";
 
     const isImage =
       mime.startsWith("image/") ||
