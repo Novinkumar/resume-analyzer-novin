@@ -1,0 +1,61 @@
+const PDFDocument = require("pdfkit");
+
+// ===============================
+// PDF REPORT GENERATOR
+// ===============================
+
+app.post("/generate-report", upload.single("resume"), async (req, res) => {
+  try {
+    const {
+      score,
+      fitScore,
+      skills,
+      missingSkills,
+      matchingSkills,
+    } = req.body;
+
+    const doc = new PDFDocument({ margin: 40 });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=resume_report.pdf"
+    );
+
+    doc.pipe(res);
+
+    // ---- HEADER
+    doc.fontSize(22).text("AI Resume Analysis Report", {
+      align: "center",
+    });
+
+    doc.moveDown();
+
+    // ---- SCORES
+    doc.fontSize(14).text(`ATS Score: ${score}`);
+    doc.text(`Job Fit Score: ${fitScore}`);
+
+    doc.moveDown();
+
+    // ---- MATCHING
+    doc.fontSize(16).text("Matching Skills");
+    matchingSkills.forEach((s) => doc.text(`• ${s}`));
+
+    doc.moveDown();
+
+    // ---- MISSING
+    doc.fontSize(16).text("Missing Skills");
+    missingSkills.forEach((s) => doc.text(`• ${s}`));
+
+    doc.moveDown();
+
+    // ---- ALL SKILLS
+    doc.fontSize(16).text("Detected Skills");
+    skills.forEach((s) => doc.text(`• ${s}`));
+
+    doc.end();
+  } catch (err) {
+    console.error("PDF error:", err);
+    res.status(500).json({ error: "PDF generation failed" });
+  }
+});
