@@ -149,80 +149,61 @@ app.post("/analyze", upload.single("resume"), async (req, res) => {
     const ext = path.extname(req.file.originalname).toLowerCase();
     const mime = req.file.mimetype;
 
-    const isPdf =
-      mime === "application/pdf" || ext === ".pdf";
-
-    const isImage =
-      mime.startsWith("image/") ||
-      [".png", ".jpg", ".jpeg"].includes(ext);
+    const isPdf = ext === ".pdf";
+    const isImage = [".png", ".jpg", ".jpeg"].includes(ext);
 
     if (isPdf) {
       const data = await pdfParse(buffer);
-      text = data.text.toLowerCase();
+      text = data.text;
     } else if (isImage) {
       const result = await Tesseract.recognize(req.file.path, "eng");
-      text = result.data.text.toLowerCase();
+      text = result.data.text;
     } else {
-      return res.status(400).json({
-        error: "Upload PDF or image",
-      });
+      return res.status(400).json({ error: "Upload PDF or image" });
     }
 
-    const skillsList = [
-      "java",
-      "python",
-      "flutter",
-      "react",
-      "node",
-      "javascript",
-      "sql",
-      "aws",
-      "docker",
-      "mongodb",
-      "kubernetes",
-      "azure",
-    ];
+    // ========= AI ANALYSIS =========
+    const prompt = `
+You are an ATS resume analyzer.
 
-    const skillStrength = {};
-    const foundSkills = [];
+Resume:
+${text.substring(0, 4000)}
 
-    skillsList.forEach((skill) => {
-      const regex = new RegExp(`\\b${skill}\\b`, "g");
-      const count = (text.match(regex) || []).length;
+Job Description:
+${jobDescription}
 
-      if (count > 0) foundSkills.push(skill);
-      skillStrength[skill] = count;
+Return STRICT JSON:
+
+{
+  "atsScore": number,
+  "fitScore": number,
+  "skillStrength": { "skill": number },
+  "matchingSkills": [],
+  "missingSkills": []
+}
+`;
+
+    const completion = await client.chat.completions.create({
+      model: "openai/gpt-4o-mini",
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: "ATS engine" },
+        { role: "user", content: prompt },
+      ],
     });
 
-    const jdText = jobDescription.toLowerCase();
+    const raw = completion.choices[0].message.content;
 
-    const jdSkills = skillsList.filter((s) =>
-      jdText.includes(s)
-    );
+    // Clean JSON if model wraps markdown
+    const jsonText = raw.match(/\{[\s\S]*\}/)?.[0];
 
-    const matchingSkills = foundSkills.filter((s) =>
-      jdSkills.includes(s)
-    );
-
-    const missingSkills = jdSkills.filter(
-      (s) => !foundSkills.includes(s)
-    );
-
-    const fitScore =
-      jdSkills.length === 0
-        ? 0
-        : Math.round(
-            (matchingSkills.length / jdSkills.length) * 100
-          );
+    const parsed = JSON.parse(jsonText);
 
     res.json({
       success: true,
-      skills: foundSkills,
-      skillStrength,
-      fitScore,
-      matchingSkills,
-      missingSkills,
+      ...parsed,
     });
+
   } catch (err) {
     console.error("Analyze error:", err);
     res.status(500).json({ error: "Failed to analyze resume" });
@@ -252,23 +233,37 @@ app.post("/interview", upload.single("resume"), async (req, res) => {
     }
 
     const prompt = `
-You are an interview coach.
+    You are an interview coach.
 
-Resume:
-${text.substring(0, 2500)}
+    Resume:
+    ${text.substring(0, 3000)}
 
-Job description:
-${jobDescription}
+    Job Description:
+    ${jobDescription}
 
-Generate:
+    Generate interview preparation in CLEAN TEXT FORMAT.
 
-TECHNICAL QUESTIONS (5)
-BEHAVIORAL QUESTIONS (5)
-SYSTEM DESIGN PROMPTS (3)
-CODING TOPICS (5)
+    Include:
 
-Return JSON.
-`;
+    TECHNICAL QUESTIONS:
+    - 5 items
+
+    BEHAVIORAL QUESTIONS:
+    - 5 items
+
+    SYSTEM DESIGN PROMPTS:
+    - 3 items
+
+    CODING TOPICS:
+    - 5 items
+
+    Rules:
+    - NO JSON
+    - NO curly brackets {}
+    - NO code blocks
+    - Use headings and bullet points only
+    - Human readable
+    `;
 
     const completion = await client.chat.completions.create({
       model: "openai/gpt-4o-mini",
@@ -312,6 +307,98 @@ app.post("/save-history", (req, res) => {
 // Get history
 app.get("/history", (req, res) => {
   res.json(historyStore);
+});
+
+
+const PDFDocument = require("pdfkit");
+
+app.post("/generate-report", async (req, res) => {
+  try {
+    const {
+      score,
+      fitScore,
+      skills,
+      matchingSkills,
+      missingSkills,
+      interviewPrep,
+    } = req.body;
+
+    const doc = new PDFDocument({ margin: 40 });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=resume_report.pdf"
+    );
+
+    doc.pipe(res);
+
+    // ================= TITLE =================
+    doc
+      .fontSize(24)
+      .text("AI Resume Analysis Report", { align: "center" })
+      .moveDown();
+
+    doc
+      .fontSize(12)
+      .text(`Generated on: ${new Date().toLocaleString()}`, {
+        align: "center",
+      });
+
+    doc.moveDown(2);
+
+    // ================= SCORES =================
+    doc.fontSize(18).text("Summary Scores");
+
+    doc.moveDown(0.5);
+    doc.fontSize(14).text(`ATS Score: ${score}%`);
+    doc.text(`Fit Score: ${fitScore}%`);
+
+    doc.moveDown(1.5);
+
+// ================= SKILLS =================
+doc.fontSize(18).text("Skills Found");
+
+(skills || []).forEach((s) => {
+  doc.text(`• ${s}`);
+});
+
+doc.moveDown();
+
+// ================= MATCHING =================
+doc.fontSize(18).text("Matching Skills");
+
+(matchingSkills || []).forEach((s) => {
+  doc.fillColor("green").text(`✔ ${s}`);
+});
+
+doc.fillColor("black").moveDown();
+
+// ================= MISSING =================
+doc.fontSize(18).text("Missing Skills");
+
+(missingSkills || []).forEach((s) => {
+  doc.fillColor("red").text(`✖ ${s}`);
+});
+
+doc.fillColor("black").moveDown();
+
+
+    // ================= INTERVIEW =================
+    if (interviewPrep) {
+      doc.addPage();
+
+      doc.fontSize(20).text("Interview Preparation");
+      doc.moveDown();
+
+      doc.fontSize(11).text(interviewPrep);
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error("PDF ERROR:", err);
+    res.status(500).json({ error: "Failed to generate PDF" });
+  }
 });
 
 // ===============================
