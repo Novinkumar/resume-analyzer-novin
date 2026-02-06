@@ -1,7 +1,16 @@
 console.log("🔥🔥🔥 RUNNING THIS SERVER.JS FILE 🔥🔥🔥");
 
 require("dotenv").config();
+const safeParse = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
 
+  try {
+    return JSON.parse(val);
+  } catch {
+    return [];
+  }
+};
 const express = require("express");
 const multer = require("multer");
 const pdfParse = require("pdf-parse");
@@ -314,7 +323,7 @@ const PDFDocument = require("pdfkit");
 
 app.post(
   "/generate-report",
-  upload.none(), // 👈 IMPORTANT
+  upload.none(),
   async (req, res) => {
     try {
       const {
@@ -326,84 +335,86 @@ app.post(
         interviewPrep,
       } = req.body;
 
+      const skillsArr = safeParse(skills);
+      const matchingArr = safeParse(matchingSkills);
+      const missingArr = safeParse(missingSkills);
 
-    const doc = new PDFDocument({ margin: 40 });
+      const doc = new PDFDocument({ margin: 40 });
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=resume_report.pdf"
-    );
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=resume_report.pdf"
+      );
 
-    doc.pipe(res);
+      doc.pipe(res);
 
-    // ================= TITLE =================
-    doc
-      .fontSize(24)
-      .text("AI Resume Analysis Report", { align: "center" })
-      .moveDown();
-
-    doc
-      .fontSize(12)
-      .text(`Generated on: ${new Date().toLocaleString()}`, {
+      // ===== TITLE =====
+      doc.fontSize(24).text("AI Resume Analysis Report", {
         align: "center",
       });
 
-    doc.moveDown(2);
-
-    // ================= SCORES =================
-    doc.fontSize(18).text("Summary Scores");
-
-    doc.moveDown(0.5);
-    doc.fontSize(14).text(`ATS Score: ${score}%`);
-    doc.text(`Fit Score: ${fitScore}%`);
-
-    doc.moveDown(1.5);
-
-// ================= SKILLS =================
-doc.fontSize(18).text("Skills Found");
-
-(skills || []).forEach((s) => {
-  doc.text(`• ${s}`);
-});
-
-doc.moveDown();
-
-// ================= MATCHING =================
-doc.fontSize(18).text("Matching Skills");
-
-(matchingSkills || []).forEach((s) => {
-  doc.fillColor("green").text(`✔ ${s}`);
-});
-
-doc.fillColor("black").moveDown();
-
-// ================= MISSING =================
-doc.fontSize(18).text("Missing Skills");
-
-(missingSkills || []).forEach((s) => {
-  doc.fillColor("red").text(`✖ ${s}`);
-});
-
-doc.fillColor("black").moveDown();
-
-
-    // ================= INTERVIEW =================
-    if (interviewPrep) {
-      doc.addPage();
-
-      doc.fontSize(20).text("Interview Preparation");
       doc.moveDown();
 
-      doc.fontSize(11).text(interviewPrep);
-    }
+      doc.fontSize(14).text(`Generated on: ${new Date().toLocaleString()}`);
 
-    doc.end();
-  } catch (err) {
-    console.error("PDF ERROR:", err);
-    res.status(500).json({ error: "Failed to generate PDF" });
+      doc.moveDown(2);
+
+      // ===== SCORES =====
+      doc.fontSize(18).text("Summary Scores");
+      doc.moveDown();
+      doc.text(`ATS Score: ${score}%`);
+      doc.text(`Fit Score: ${fitScore}%`);
+
+      doc.moveDown(2);
+
+      // ===== SKILLS =====
+      doc.fontSize(18).text("Skills Found");
+
+      skillsArr.forEach((s) => {
+        doc.text(`• ${s}`);
+      });
+
+      doc.moveDown();
+
+      // ===== MATCHING =====
+      doc.fontSize(18).text("Matching Skills");
+
+      matchingArr.forEach((s) => {
+        doc.fillColor("green").text(`✔ ${s}`);
+      });
+
+      doc.fillColor("black");
+      doc.moveDown();
+
+      // ===== MISSING =====
+      doc.fontSize(18).text("Missing Skills");
+
+      missingArr.forEach((s) => {
+        doc.fillColor("red").text(`✖ ${s}`);
+      });
+
+      doc.fillColor("black");
+      doc.moveDown();
+
+      // ===== INTERVIEW =====
+      if (interviewPrep) {
+        doc.addPage();
+        doc.fontSize(20).text("Interview Preparation");
+        doc.moveDown();
+        doc.fontSize(11).text(interviewPrep);
+      }
+
+      doc.end();
+    } catch (err) {
+      console.error("PDF ERROR:", err);
+
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to generate PDF" });
+      }
+    }
   }
-});
+);
 
 // ===============================
 // START SERVER
