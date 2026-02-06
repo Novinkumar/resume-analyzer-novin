@@ -312,16 +312,20 @@ app.get("/history", (req, res) => {
 
 const PDFDocument = require("pdfkit");
 
-app.post("/generate-report", async (req, res) => {
-  try {
-    const {
-      score,
-      fitScore,
-      skills,
-      matchingSkills,
-      missingSkills,
-      interviewPrep,
-    } = req.body;
+app.post(
+  "/generate-report",
+  upload.none(), // 👈 IMPORTANT
+  async (req, res) => {
+    try {
+      const {
+        score,
+        fitScore,
+        skills,
+        matchingSkills,
+        missingSkills,
+        interviewPrep,
+      } = req.body;
+
 
     const doc = new PDFDocument({ margin: 40 });
 
