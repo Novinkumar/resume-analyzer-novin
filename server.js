@@ -48,7 +48,7 @@ const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
   defaultHeaders: {
-    "HTTP-Referer": "http://localhost:3000",
+    "HTTP-Referer": "https://resume-analyzer-novin.onrender.com",
     "X-Title": "AI Resume Analyzer",
   },
 });
@@ -150,7 +150,11 @@ app.post("/analyze", upload.single("resume"), async (req, res) => {
     const mime = req.file.mimetype;
 
     const isPdf =
-      mime === "application/pdf" || ext === ".pdf";
+     ext === ".pdf";
+
+   const isImage =
+     [".png", ".jpg", ".jpeg"].includes(ext);
+
 
     const isImage =
       mime.startsWith("image/") ||
@@ -318,5 +322,5 @@ app.get("/history", (req, res) => {
 // START SERVER
 // ===============================
 app.listen(3000, () => {
-  console.log("🚀 Server running on http://localhost:3000");
+  console.log("🚀 Server running on https://resume-analyzer-novin.onrender.com");
 });
