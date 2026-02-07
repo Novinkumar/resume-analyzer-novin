@@ -173,24 +173,31 @@ app.post("/analyze", upload.single("resume"), async (req, res) => {
 
     // ========= AI ANALYSIS =========
     const prompt = `
-You are an ATS resume analyzer.
+    You are an advanced ATS resume analyzer and AI-detection system.
 
-Resume:
-${text.substring(0, 4000)}
+    Resume:
+    ${text.substring(0, 4000)}
 
-Job Description:
-${jobDescription}
+    Job Description:
+    ${jobDescription}
 
-Return STRICT JSON:
+    Return STRICT JSON:
 
-{
-  "atsScore": number,
-  "fitScore": number,
-  "skillStrength": { "skill": number },
-  "matchingSkills": [],
-  "missingSkills": []
-}
-`;
+    {
+      "atsScore": number,
+      "fitScore": number,
+      "skillStrength": { "skill": number },
+      "matchingSkills": [],
+      "missingSkills": [],
+      "aiDetection": {
+        "aiProbability": number,
+        "riskLevel": "Low | Medium | High",
+        "flaggedSections": [],
+        "reasons": []
+      }
+    }
+    `;
+
 
     const completion = await client.chat.completions.create({
       model: "openai/gpt-4o-mini",
