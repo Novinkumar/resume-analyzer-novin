@@ -218,6 +218,82 @@ Return STRICT JSON:
     res.status(500).json({ error: "Failed to analyze resume" });
   }
 });
+// ===============================
+// RESUME OPTIMIZER
+// ===============================
+app.post("/optimize-resume", upload.single("resume"), async (req, res) => {
+  try {
+    const jobDescription = req.body.jobDescription || "";
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const buffer = fs.readFileSync(req.file.path);
+
+    let text = "";
+
+    const ext = path.extname(req.file.originalname).toLowerCase();
+
+    if (ext === ".pdf") {
+      const data = await pdfParse(buffer);
+      text = data.text;
+    } else {
+      const result = await Tesseract.recognize(req.file.path, "eng");
+      text = result.data.text;
+    }
+
+    const prompt = `
+You are a professional resume writer.
+
+Rewrite this resume to better match the job description.
+
+Rules:
+- Do NOT invent experience
+- Improve wording
+- Add missing keywords naturally
+- ATS optimized
+- Keep concise
+
+Return STRICT JSON:
+
+{
+  "optimizedSummary": "",
+  "rewrittenExperience": [],
+  "addedKeywords": []
+}
+
+Resume:
+${text.substring(0, 3500)}
+
+Job Description:
+${jobDescription}
+`;
+
+    const completion = await client.chat.completions.create({
+      model: "openai/gpt-4o-mini",
+      temperature: 0.3,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const raw = completion.choices[0].message.content;
+
+    const jsonText = raw.match(/\{[\s\S]*\}/)?.[0];
+
+    const parsed = JSON.parse(jsonText);
+
+    res.json({
+      success: true,
+      ...parsed,
+    });
+
+  } catch (err) {
+    console.error("Optimize resume error:", err);
+    res.status(500).json({
+      error: "Failed to optimize resume",
+    });
+  }
+});
 
 // ===============================
 // INTERVIEW
